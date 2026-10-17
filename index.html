@@ -81,7 +81,24 @@ textarea{font:13px/1.45 var(--body);width:100%;min-height:120px;border:1px solid
 <script>
 (function(){
 const PARASHOT="בראשית,נח,לך לך,וירא,חיי שרה,תולדות,ויצא,וישלח,וישב,מקץ,ויגש,ויחי,שמות,וארא,בא,בשלח,יתרו,משפטים,תרומה,תצוה,כי תשא,ויקהל,פקודי,ויקהל-פקודי,ויקרא,צו,שמיני,תזריע,מצורע,תזריע-מצורע,אחרי מות,קדושים,אחרי מות-קדושים,אמור,בהר,בחוקותי,בהר-בחוקותי,במדבר,נשא,בהעלותך,שלח,קרח,חוקת,בלק,חוקת-בלק,פינחס,מטות,מסעי,מטות-מסעי,דברים,ואתחנן,עקב,ראה,שופטים,כי תצא,כי תבוא,נצבים,וילך,נצבים-וילך,האזינו,וזאת הברכה".split(",");
-const GABAI_PHONE="972546563366"; // international format without +, e.g. 9725XXXXXXXX. Empty = the sender picks the contact in WhatsApp.
+const GABAI_PHONE="972546563366";
+// Firebase project that receives the encrypted forms (empty = WhatsApp only). Only the gabbai's app holds the private key.
+const FB_PROJECT="aliyot-83aea";
+const FB_DB="default"; // the database id is "default" (no brackets)
+const INBOX_KEY={"alg": "RSA-OAEP-256", "kty": "RSA", "n": "11EB9ccLuwN0Ub8-Rmr09U-2Pf85UZF_8w2xTAEJb0P3EXq6PHqwBpvd3VuwbbH5X2Uz8Jgjgljp8rINwpMZ31U7Cf8aadvjZfFKEs46U743YI-CGz8izy3dTLAlsWAJONqPqo0Y8Vd-7X63P53DtLNc8mExOklndRq6ilxI-sp6cG2cgTvoceqHaCck8BXopK8tcKnO5RhEXAY9yj945a3kU3EH8E3BIsmWMS6w0a8NdoyWvPQKc1FjidET-FGfjEeXhrebTQEfwTUYjrcCMDxWrGqgaNEg8CoXC9wtnxDdKpQ_iT0x_VrFnB6IMOnSPg_LX1P7WSm1Ltss7MGkYNShuyblh1uuGo8oAOi-w2S786xEeMAM0X1_KBpTJfqmN3RCtYnLtv-W1pDoRujN7U1yKEosJ9UC4Y3Bzduk5yv0iynfkNoN7hZZS8U17sWjXn2Lo9p5a3Dwap4_HDY0WuaZxEaWSWHOZaySVl_iDSX1B2X5K1wFboQhQHR5Apfj", "e": "AQAB"};
+const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf)));
+async function encryptForGabbai(text){const s=crypto.subtle;
+  const pub=await s.importKey("jwk",INBOX_KEY,{name:"RSA-OAEP",hash:"SHA-256"},false,["encrypt"]);
+  const aes=await s.generateKey({name:"AES-GCM",length:256},true,["encrypt"]);const iv=crypto.getRandomValues(new Uint8Array(12));
+  const data=await s.encrypt({name:"AES-GCM",iv},aes,new TextEncoder().encode(text));
+  const key=await s.encrypt({name:"RSA-OAEP"},pub,await s.exportKey("raw",aes));
+  return JSON.stringify({v:1,k:b64(key),iv:b64(iv),d:b64(data)})}
+async function saveToInbox(text){
+  const c=await encryptForGabbai(text);
+  const r=await fetch("https://firestore.googleapis.com/v1/projects/"+FB_PROJECT+"/databases/"+FB_DB+"/documents/inbox",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fields:{c:{stringValue:c}}})});
+  if(!r.ok)throw new Error("save "+r.status)}
+let sent=false;
+const WA_ICON='<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.8-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.2.1.7-.1 1.2z"/></svg>'; // international format without +, e.g. 9725XXXXXXXX. Empty = the sender picks the contact in WhatsApp.
 const KEY="aliyot-register-draft";
 let d=load()||{married:"",hasKids:"",kids:[],hasYz:"",yz:[]};let i=0;
 function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return null}}
@@ -151,8 +168,10 @@ function message(){const L=["טופס מתפלל · גבאי עליות"];const 
 function summaryView(){const msg=message();const url="https://wa.me/"+GABAI_PHONE+"?text="+encodeURIComponent(msg);
   return `<h2 class="q">כמעט סיימנו. כך נראים הפרטים:</h2>
   <div class="sum">${rows().map(r=>`<div><b>${esc(r[0])}</b><span>${esc(r[1])}</span></div>`).join("")}</div>
-  <p class="hint" style="margin:0">לחצו "שליחה בוואטסאפ", בחרו את הגבאי ושלחו את ההודעה כמו שהיא.</p>
-  <a class="btn wa" href="${url}" target="_blank" rel="noopener"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.8-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.2.1.7-.1 1.2z"/></svg>שליחה בוואטסאפ</a>
+  ${FB_PROJECT?`<p class="hint" style="margin:0">לחצו "שליחה לגבאי". הפרטים יישמרו מוצפנים אצל הגבאי, ואז ייפתח וואטסאפ עם הודעה קצרה לגבאי. לוחצים בו שליחה וזהו.</p>
+  <button type="button" class="btn wa" id="sendBtn">${WA_ICON}שליחה לגבאי</button>
+  <p class="hint" id="sendStatus" role="status" style="margin:0"></p>`:`<p class="hint" style="margin:0">לחצו "שליחה בוואטסאפ" ושלחו את ההודעה לגבאי כמו שהיא.</p>
+  <a class="btn wa" href="${url}" target="_blank" rel="noopener"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.8-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.2.1.7-.1 1.2z"/></svg>שליחה בוואטסאפ</a>`}
   <button type="button" class="btn copy" id="copyBtn">העתקת ההודעה</button>
   <textarea id="msgBox" readonly aria-label="ההודעה לגבאי" hidden>${esc(msg)}</textarea>`}
 
@@ -178,6 +197,11 @@ function check(st){const t=TEXT[st.id];
 function next(){const S=steps(),st=S[i];read(st);const e=check(st);if(e){document.getElementById("err").textContent=e;return}i++;draw()}
 document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const S=steps(),st=S[i];
   if(b.id==="next")return next();
+  if(b.id==="sendBtn"){if(sent)return;const st2=document.getElementById("sendStatus");b.disabled=true;b.lastChild.textContent="שולח...";const msg=message();
+    saveToInbox(msg).then(()=>{sent=true;b.lastChild.textContent="נשלח ✓";st2.textContent="הפרטים נשמרו. פותחים את וואטסאפ להודעה לגבאי...";
+      const short="שלום, מילאתי עכשיו טופס מתפלל באתר הרישום.\n"+[d.name,d.family].filter(Boolean).join(" ")+(d.father?" בן "+d.father:"")+"\n(הפרטים נשמרו אוטומטית באפליקציה)";
+      setTimeout(()=>{location.href="https://wa.me/"+GABAI_PHONE+"?text="+encodeURIComponent(short)},700)})
+    .catch(()=>{b.disabled=false;b.lastChild.textContent="שליחה לגבאי";st2.innerHTML='השמירה לא הצליחה. אפשר לשלוח את כל הפרטים בוואטסאפ: <a href="https://wa.me/'+GABAI_PHONE+'?text='+encodeURIComponent(msg)+'" target="_blank" rel="noopener">שליחה בוואטסאפ</a>'});return}
   if(b.id==="back"){read(st);i=Math.max(0,i-1);return draw()}
   if(b.dataset.pick){read(st);d[b.dataset.pick]=b.dataset.v;if(b.dataset.pick==="hasKids"&&b.dataset.v==="כן"&&!d.kids.length)d.kids=[{}];if(b.dataset.pick==="hasYz"&&b.dataset.v==="כן"&&!d.yz.length)d.yz=[{}];save();i++;return draw()}
   if(b.dataset.kid!==undefined){read(st);const k=+b.dataset.kid;d.kids[k]=Object.assign({},d.kids[k],{gender:b.dataset.v});save();return draw()}
