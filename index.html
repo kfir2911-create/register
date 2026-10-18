@@ -133,7 +133,7 @@ function steps(){
   if(d.hasYz==="כן"){const n=Math.max(1,d.yz.length);for(let k=0;k<n;k++){s.push({id:"yz",k,label:"יארצייט"});if(k===n-1&&k<1)s.push({id:"moreYz",k,label:"יארצייט"})}}
   s.push({id:"bm",label:"תאריכים"});
   if(d.married==="כן")s.push({id:"wedding",label:"תאריכים"});
-  s.push({id:"other",label:"תאריכים"},{id:"summary",label:"סיום"});
+  s.push({id:"other",label:"תאריכים"},{id:"contact",label:"יצירת קשר"},{id:"summary",label:"סיום"});
   return s;
 }
 const TEXT={name:["מה השם המלא שלך לעלייה לתורה?","למשל: יוסף חיים",true],family:["מה שם המשפחה?","",true],father:["מה שם האב?","כפי שקוראים לעלייה: ...בן ___",true],mother:["מה שם האם?","",false],
@@ -162,13 +162,16 @@ function view(st){
   if(st.id==="other")return `<h2 class="q">יש תאריך מיוחד נוסף?</h2><p class="hint">למשל יום הולדת או יום עלייה לארץ. אפשר לדלג.</p>
     <label class="f">מה התאריך<input id="oLabel" value="${esc(d.otherLabel)}" placeholder="יום הולדת" autocomplete="off"></label>
     <label class="f">תאריך${dateSel('id="oDate"',d.otherDate,"תאריך")}</label>`;
+  if(st.id==="contact")return `<h2 class="q">פרטים ליצירת קשר</h2><p class="hint">כדי שהגבאי יוכל לעדכן אתכם על עלייה לתורה. אפשר לדלג.</p>
+    <label class="f">טלפון נייד<input id="cPhone" type="tel" inputmode="tel" autocomplete="tel" dir="ltr" value="${esc(d.phone)}" placeholder="050-0000000"></label>
+    <label class="f">מייל<input id="cEmail" type="email" inputmode="email" autocomplete="email" dir="ltr" value="${esc(d.email)}" placeholder="name@example.com"></label>`;
   if(st.id==="summary")return summaryView();
 }
 function rows(){const r=[["שם מלא",d.name],["שם משפחה",d.family],["שם האב",d.father],["שם האם",d.mother],["שבט",d.tribe]];
   if(d.married==="כן")r.push(["אם האישה",d.wifeMother],["אב האישה",d.wifeFather]);
   if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name){const a=age(k.birth);r.push(["ילד "+(n+1),k.name+(k.gender?" ("+k.gender+")":"")+(a!==null?" · גיל "+a:"")])}});
   if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date)r.push(["יארצייט "+(n+1),dmy(y.date)+(y.for?" · "+y.for:"")])});
-  r.push(["פרשת בר מצווה",d.bm],["יום נישואין",d.married==="כן"?dmy(d.wedding):""],["תאריך מיוחד",(d.otherLabel||"")+(d.otherDate?" "+dmy(d.otherDate):"")]);
+  r.push(["פרשת בר מצווה",d.bm],["יום נישואין",d.married==="כן"?dmy(d.wedding):""],["תאריך מיוחד",(d.otherLabel||"")+(d.otherDate?" "+dmy(d.otherDate):"")],["טלפון",d.phone],["מייל",d.email]);
   return r.filter(x=>x[1]&&String(x[1]).trim())}
 // the message the gabbai pastes into the app; labels match the app's import columns exactly
 function message(){const L=["טופס מתפלל · גבאי עליות"];const add=(k,v)=>{if(v&&String(v).trim())L.push(k+": "+String(v).trim())};
@@ -178,6 +181,7 @@ function message(){const L=["טופס מתפלל · גבאי עליות"];const 
   add("האם יש יארצייט?",d.hasYz||"");
   if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date){add("תאריך פטירה "+(n+1),dmy(y.date));add("יארצייט של "+(n+1),y.for)}});
   add("פרשת בר מצווה",d.bm);if(d.married==="כן")add("יום נישואין",dmy(d.wedding));add("תאריך מיוחד אחר: מה",d.otherLabel);add("תאריך מיוחד אחר: תאריך",dmy(d.otherDate));
+  add("טלפון",d.phone);add("מייל",d.email);
   return L.join("\n")}
 function summaryView(){const msg=message();const url="https://wa.me/"+GABAI_PHONE+"?text="+encodeURIComponent(msg);
   return `<h2 class="q">כמעט סיימנו. כך נראים הפרטים:</h2>
@@ -200,10 +204,13 @@ function read(st){const v=id=>{const e=document.getElementById(id);return e?e.va
   if(st.id==="kid"){d.kids[st.k]=Object.assign({},d.kids[st.k],{name:v("kName"),birth:v("kBirth")})}
   if(st.id==="yz"){d.yz[st.k]={date:v("yDate"),for:v("yFor")}}
   if(st.id==="other"){d.otherLabel=v("oLabel");d.otherDate=v("oDate")}
+  if(st.id==="contact"){d.phone=v("cPhone");d.email=v("cEmail")}
   save()}
 function check(st){const t=TEXT[st.id];
   if(t&&t[2]&&!d[st.id])return "צריך למלא את השדה הזה כדי להמשיך.";
   if(st.id==="tribe"&&!d.tribe)return "בחרו כהן, לוי או ישראל.";
+  if(st.id==="contact"&&d.phone&&d.phone.replace(/\D/g,"").length<9)return "מספר הטלפון קצר מדי. בדקו אותו, או השאירו ריק.";
+  if(st.id==="contact"&&d.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email))return "כתובת המייל לא נראית תקינה. בדקו אותה, או השאירו ריק.";
   if(["married","hasKids","hasYz"].includes(st.id)&&!d[st.id])return "בחרו כן או לא.";
   if(st.id==="kid"&&!(d.kids[st.k]&&d.kids[st.k].name))return "כתבו את שם הילד, או חזרו אחורה ובחרו שאין ילדים.";
   if(st.id==="yz"&&!(d.yz[st.k]&&d.yz[st.k].date))return "בחרו את תאריך הפטירה.";
