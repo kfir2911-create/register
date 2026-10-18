@@ -155,7 +155,7 @@ function steps(){
   const s=[{id:"hello"},
     {id:"name",label:"פרטי העולה"},{id:"family",label:"פרטי העולה"},{id:"father",label:"פרטי העולה"},{id:"mother",label:"פרטי העולה"},{id:"tribe",label:"פרטי העולה"},
     {id:"married",label:"משפחה"}];
-  if(d.married==="כן")s.push({id:"wifeMother",label:"משפחה"},{id:"wifeFather",label:"משפחה"});
+  if(d.married==="כן")s.push({id:"wife",label:"משפחה"},{id:"wifeFather",label:"משפחה"},{id:"wifeMother",label:"משפחה"});
   s.push({id:"hasKids",label:"ילדים"});
   if(d.hasKids==="כן"){const n=Math.max(1,d.kids.length);for(let k=0;k<n;k++){s.push({id:"kid",k,label:"ילדים"});if(k===n-1&&k<6)s.push({id:"moreKids",k,label:"ילדים"})}}
   s.push({id:"hasYz",label:"יארצייט"});
@@ -204,7 +204,7 @@ function view(st){
 }
 function yConv(y){if(!y||!y.date)return"";return y.cal==="he"?"בלועזי: "+dmy(y.date):"בעברי: "+hebOfIso(y.date)}
 function rows(){const r=[["שם מלא",d.name],["שם משפחה",d.family],["שם האב",d.father],["שם האם",d.mother],["שבט",d.tribe]];
-  if(d.married==="כן")r.push(["אם האישה",d.wifeMother],["אב האישה",d.wifeFather]);
+  if(d.married==="כן")r.push(["שם האישה",d.wife],["אב האישה",d.wifeFather],["אם האישה",d.wifeMother]);
   if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name){const a=age(k.birth);r.push(["ילד "+(n+1),k.name+(k.gender?" ("+k.gender+")":"")+(a!==null?" · גיל "+a:"")+(kidAdult(k)&&k.bm?" · בר מצווה: "+k.bm:"")+(kidAdult(k)&&k.bmRead?" · מעוניין לקרוא":"")])}});
   if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date)r.push(["יארצייט "+(n+1),(y.heb?y.heb+" · ":"")+dmy(y.date)+(y.for?" · "+y.for:"")])});
   r.push(["פרשת בר מצווה",(d.bm||"")+(d.bmRead?(d.bm?" · ":"")+"מעוניין לקרוא":"")],["יום נישואין",d.married==="כן"?dmy(d.wedding):""],["תאריך מיוחד",(d.otherLabel||"")+(d.otherDate?" "+dmy(d.otherDate):"")],["טלפון",d.phone],["מייל",d.email]);
@@ -212,7 +212,7 @@ function rows(){const r=[["שם מלא",d.name],["שם משפחה",d.family],["�
 // the message the gabbai pastes into the app; labels match the app's import columns exactly
 function message(){const L=["טופס מתפלל · גבאי עליות"];const add=(k,v)=>{if(v&&String(v).trim())L.push(k+": "+String(v).trim())};
   add("שם מלא (לעלייה לתורה)",d.name);add("שם משפחה",d.family);add("שם האב",d.father);add("שם האם",d.mother);add("שבט",d.tribe);
-  if(d.married==="כן"){add("שם אם האישה",d.wifeMother);add("שם אב האישה",d.wifeFather)}
+  if(d.married==="כן"){add("שם האישה",d.wife);add("שם אב האישה",d.wifeFather);add("שם אם האישה",d.wifeMother)}
   if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name)L.push("ילד "+(n+1)+": "+k.name+" | "+(k.gender||"")+" | "+dmy(k.birth)+(kidAdult(k)&&k.bm?" | פרשת בר מצווה: "+k.bm:"")+(kidAdult(k)&&k.bmRead?" | מעוניין לקרוא: כן":""))});
   add("האם יש יארצייט?",d.hasYz||"");
   if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date){add("תאריך פטירה "+(n+1),dmy(y.date));add("תאריך פטירה עברי "+(n+1),y.heb);add("יארצייט של "+(n+1),y.for)}});
