@@ -63,6 +63,9 @@ input:focus,select:focus,button:focus-visible{outline:3px solid color-mix(in srg
 textarea{font:13px/1.45 var(--body);width:100%;min-height:120px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--field);color:var(--ink)}
 .foot{color:var(--muted);font-size:.8rem;text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.chk{display:flex;align-items:center;gap:10px;font-weight:500;font-size:1rem;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--field);cursor:pointer}
+.chk input{width:22px;height:22px;flex:none;accent-color:var(--navy);margin:0}
+.conv{color:var(--ok);font-weight:700;font-size:.95rem;margin:-6px 0 0;min-height:1.2em}
 .dsel{display:flex;gap:6px;width:100%}.dsel select{flex:1 1 0;min-width:0}.dsel select[data-dpart="m"]{flex:1.4 1 0}
 </style>
 </head>
@@ -95,6 +98,31 @@ document.addEventListener("change",e=>{const s=e.target.closest&&e.target.closes
   const sel=p=>w.querySelector('[data-dpart="'+p+'"]');let d=sel("d").value;const m=sel("m").value,y=sel("y").value;let v="";
   if(d&&m&&y){const max=new Date(+y,+m,0).getDate();if(+d>max){d=String(max).padStart(2,"0");sel("d").value=d}v=y+"-"+m+"-"+d}
   if(v!==h.value){h.value=v;h.dispatchEvent(new Event("change",{bubbles:true}))}});
+// Hebrew dates: Intl's Hebrew calendar does the conversion, gematria is for display ("י״ב אדר ב׳ תשנ״ה")
+const HEB_FMT=(()=>{try{return new Intl.DateTimeFormat("he-u-ca-hebrew",{day:"numeric",month:"long",year:"numeric"})}catch(e){return null}})();
+const HEB_MONTH_LIST=["תשרי","חשוון","כסלו","טבת","שבט","אדר","אדר א׳","אדר ב׳","ניסן","אייר","סיוון","תמוז","אב","אלול"];
+const hebLeap=y=>(7*y+1)%19<7;
+function gem(n){const L=[[400,"ת"],[300,"ש"],[200,"ר"],[100,"ק"],[90,"צ"],[80,"פ"],[70,"ע"],[60,"ס"],[50,"נ"],[40,"מ"],[30,"ל"],[20,"כ"],[10,"י"],[9,"ט"],[8,"ח"],[7,"ז"],[6,"ו"],[5,"ה"],[4,"ד"],[3,"ג"],[2,"ב"],[1,"א"]];
+  let s="";n%=1000;while(n>0){if(n===15||n===16){s+=n===15?"טו":"טז";break}const x=L.find(l=>l[0]<=n);s+=x[1];n-=x[0]}
+  return s.length>1?s.slice(0,-1)+"״"+s.slice(-1):s+"׳"}
+function ungem(s){const V={"א":1,"ב":2,"ג":3,"ד":4,"ה":5,"ו":6,"ז":7,"ח":8,"ט":9,"י":10,"כ":20,"ך":20,"ל":30,"מ":40,"ם":40,"נ":50,"ן":50,"ס":60,"ע":70,"פ":80,"ף":80,"צ":90,"ץ":90,"ק":100,"ר":200,"ש":300,"ת":400};let n=0;for(const c of String(s))n+=V[c]||0;return n}
+function hebOf(isoDate){if(!HEB_FMT||!isoDate)return null;const [y,m,d]=isoDate.split("-").map(Number);if(!y||!m||!d)return null;const p={};HEB_FMT.formatToParts(new Date(y,m-1,d,12)).forEach(x=>p[x.type]=x.value);return {d:+p.day,m:p.month,y:+p.year}}
+const hebLabel=h=>h?gem(h.d)+" "+h.m+" "+gem(h.y):"";
+const hebOfIso=isoDate=>hebLabel(hebOf(isoDate));
+// Hebrew day/month/year -> ISO date; in a regular year אדר א׳/ב׳ mean אדר, in a leap year a plain אדר is ambiguous and returns ""
+function hebToIso(d,m,y){d=+d;y=+y;if(!HEB_FMT||!d||!m||!y)return"";if(!hebLeap(y)&&/^אדר /.test(m))m="אדר";if(hebLeap(y)&&m==="אדר")return"";
+  const t=new Date(y-3761,7,1,12);for(let i=0;i<440;i++){const p={};HEB_FMT.formatToParts(t).forEach(x=>p[x.type]=x.value);
+    if(+p.year===y&&p.month===m&&+p.day===d)return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");t.setDate(t.getDate()+1)}return""}
+// "י״ב אדר ב׳ תשנ״ה" (or "12 באדר ב׳ 5755") -> ISO date
+function hebTextToIso(s){const w=String(s||"").trim().split(/\s+/);if(w.length<3)return"";const num=x=>/^\d+$/.test(x)?+x:ungem(x);
+  const d=num(w[0]);let y=num(w[w.length-1]);if(y<1000)y+=5000;let m=w.slice(1,-1).join(" ");if(!HEB_MONTH_LIST.includes(m)&&m.startsWith("ב"))m=m.slice(1);return hebToIso(d,m,y)}
+// three dropdowns for a Hebrew date; ids get the given prefix + Hd / Hm / Hy
+function hebSel(prefix,h){h=h||{};const cur=hebOf(new Date().toISOString().slice(0,10));const Y=cur?cur.y:5787;
+  const opt=(v,t,c)=>`<option value="${v}"${String(v)===String(c??"")?" selected":""}>${t}</option>`;
+  let days=opt("","יום",h.d);for(let i=1;i<=30;i++)days+=opt(i,gem(i),h.d);
+  let months=opt("","חודש",h.m);HEB_MONTH_LIST.forEach(n=>months+=opt(n,n,h.m));
+  let years=opt("","שנה",h.y);for(let i=Y;i>=5660;i--)years+=opt(i,gem(i)+" "+(i-3760),h.y);
+  return `<span class="dsel" role="group" aria-label="תאריך עברי"><select id="${prefix}Hd" aria-label="יום">${days}</select><select id="${prefix}Hm" data-hm aria-label="חודש">${months}</select><select id="${prefix}Hy" aria-label="שנה">${years}</select></span>`}
 const GABAI_PHONE="972546563366";
 // Firebase project that receives the encrypted forms (empty = WhatsApp only). Only the gabbai's app holds the private key.
 const FB_PROJECT="aliyot-83aea";
@@ -119,6 +147,7 @@ function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return
 function save(){try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){}}
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const dmy=v=>{if(!v)return"";const [y,m,dd]=v.split("-");return dd+"/"+m+"/"+y};
+const kidAdult=k=>k&&k.gender==="בן"&&age(k.birth)>=13;
 function age(b){if(!b)return null;const x=new Date(b+"T00:00"),n=new Date();let a=n.getFullYear()-x.getFullYear();if(n.getMonth()<x.getMonth()||(n.getMonth()===x.getMonth()&&n.getDate()<x.getDate()))a--;return a<0?null:a}
 
 // each step: {id, label (section), render(), read(), valid()}; steps are rebuilt from the answers so far
@@ -150,14 +179,20 @@ function view(st){
     <label class="f">שם<input id="kName" value="${esc(k.name)}" autocomplete="off"></label>
     <div class="choices">${["בן","בת"].map(v=>`<button type="button" class="choice" data-kid="${st.k}" data-v="${v}" aria-pressed="${k.gender===v}">${v}</button>`).join("")}</div>
     <label class="f">תאריך לידה${dateSel('id="kBirth"',k.birth,"תאריך לידה")}</label>
-    <span class="age" id="kAge">${a!==null?"גיל "+a:""}</span>`}
+    <span class="age" id="kAge">${a!==null?"גיל "+a:""}</span>
+    ${k.gender==="בן"&&a!==null&&a>=13?`<label class="f">פרשת בר המצווה של ${esc(k.name||"הבן")}<select id="kBm"><option value="">לא זוכר / לדלג</option>${PARASHOT.map(p=>`<option${k.bm===p?" selected":""}>${p}</option>`).join("")}</select></label>
+    <label class="chk"><input type="checkbox" id="kRead"${k.bmRead?" checked":""}> מעוניין לקרוא בתורה בשבת פרשת בר המצווה</label>`:""}`}
   if(st.id==="moreKids")return `<h2 class="q">יש עוד ילד?</h2><div class="choices"><button type="button" class="choice" data-more="kids">כן, להוסיף</button><button type="button" class="choice" data-nomore="1">לא, להמשיך</button></div>`;
   if(st.id==="hasYz")return yesNo("האם יש לך יארצייט?","hasYz","יום השנה לפטירת קרוב משפחה. בשבוע הזה תקבל עדיפות לעלייה.");
-  if(st.id==="yz"){const y=d.yz[st.k]||{};return `<h2 class="q">יארצייט ${st.k+1}</h2>
-    <label class="f">תאריך הפטירה${dateSel('id="yDate"',y.date,"תאריך הפטירה")}</label>
+  if(st.id==="yz"){const y=d.yz[st.k]||{};const he=y.cal==="he";return `<h2 class="q">יארצייט ${st.k+1}</h2>
+    <div class="choices">${[["greg","תאריך לועזי"],["he","תאריך עברי"]].map(([v,t])=>`<button type="button" class="choice" data-cal="${v}" aria-pressed="${(y.cal||"greg")===v}">${t}</button>`).join("")}</div>
+    ${he?`<label class="f">תאריך הפטירה בעברי${hebSel("y",y.hd?{d:y.hd,m:y.hm,y:y.hy}:hebOf(y.date))}</label>`
+      :`<label class="f">תאריך הפטירה בלועזי${dateSel('id="yDate"',y.date,"תאריך הפטירה")}</label><p class="hint">אם הפטירה הייתה אחרי השקיעה, עדיף לבחור תאריך עברי.</p>`}
+    <p class="conv" id="yConv">${yConv(y)}</p>
     <label class="f">יארצייט של<input id="yFor" value="${esc(y.for)}" placeholder="למשל: אבי, אמי, סבי" autocomplete="off"></label>`}
   if(st.id==="moreYz")return `<h2 class="q">יש יארצייט נוסף?</h2><div class="choices"><button type="button" class="choice" data-more="yz">כן, להוסיף</button><button type="button" class="choice" data-nomore="1">לא, להמשיך</button></div>`;
-  if(st.id==="bm")return `<h2 class="q">באיזו פרשה הייתה בר המצווה שלך?</h2><p class="hint">אפשר לדלג אם לא זוכרים.</p><select id="in"><option value="">לא זוכר / לדלג</option>${PARASHOT.map(p=>`<option${d.bm===p?" selected":""}>${p}</option>`).join("")}</select>`;
+  if(st.id==="bm")return `<h2 class="q">באיזו פרשה הייתה בר המצווה שלך?</h2><p class="hint">אפשר לדלג אם לא זוכרים.</p><select id="in"><option value="">לא זוכר / לדלג</option>${PARASHOT.map(p=>`<option${d.bm===p?" selected":""}>${p}</option>`).join("")}</select>
+    <label class="chk"><input type="checkbox" id="bmRead"${d.bmRead?" checked":""}> מעוניין לקרוא בתורה בשבת פרשת בר המצווה</label>`;
   if(st.id==="wedding")return `<h2 class="q">מתי יום הנישואין?</h2><p class="hint">אפשר לדלג.</p>${dateSel('id="in"',d.wedding,"יום הנישואין")}`;
   if(st.id==="other")return `<h2 class="q">יש תאריך מיוחד נוסף?</h2><p class="hint">למשל יום הולדת או יום עלייה לארץ. אפשר לדלג.</p>
     <label class="f">מה התאריך<input id="oLabel" value="${esc(d.otherLabel)}" placeholder="יום הולדת" autocomplete="off"></label>
@@ -167,20 +202,21 @@ function view(st){
     <label class="f">מייל<input id="cEmail" type="email" inputmode="email" autocomplete="email" dir="ltr" value="${esc(d.email)}" placeholder="name@example.com"></label>`;
   if(st.id==="summary")return summaryView();
 }
+function yConv(y){if(!y||!y.date)return"";return y.cal==="he"?"בלועזי: "+dmy(y.date):"בעברי: "+hebOfIso(y.date)}
 function rows(){const r=[["שם מלא",d.name],["שם משפחה",d.family],["שם האב",d.father],["שם האם",d.mother],["שבט",d.tribe]];
   if(d.married==="כן")r.push(["אם האישה",d.wifeMother],["אב האישה",d.wifeFather]);
-  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name){const a=age(k.birth);r.push(["ילד "+(n+1),k.name+(k.gender?" ("+k.gender+")":"")+(a!==null?" · גיל "+a:"")])}});
-  if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date)r.push(["יארצייט "+(n+1),dmy(y.date)+(y.for?" · "+y.for:"")])});
-  r.push(["פרשת בר מצווה",d.bm],["יום נישואין",d.married==="כן"?dmy(d.wedding):""],["תאריך מיוחד",(d.otherLabel||"")+(d.otherDate?" "+dmy(d.otherDate):"")],["טלפון",d.phone],["מייל",d.email]);
+  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name){const a=age(k.birth);r.push(["ילד "+(n+1),k.name+(k.gender?" ("+k.gender+")":"")+(a!==null?" · גיל "+a:"")+(kidAdult(k)&&k.bm?" · בר מצווה: "+k.bm:"")+(kidAdult(k)&&k.bmRead?" · מעוניין לקרוא":"")])}});
+  if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date)r.push(["יארצייט "+(n+1),(y.heb?y.heb+" · ":"")+dmy(y.date)+(y.for?" · "+y.for:"")])});
+  r.push(["פרשת בר מצווה",(d.bm||"")+(d.bmRead?(d.bm?" · ":"")+"מעוניין לקרוא":"")],["יום נישואין",d.married==="כן"?dmy(d.wedding):""],["תאריך מיוחד",(d.otherLabel||"")+(d.otherDate?" "+dmy(d.otherDate):"")],["טלפון",d.phone],["מייל",d.email]);
   return r.filter(x=>x[1]&&String(x[1]).trim())}
 // the message the gabbai pastes into the app; labels match the app's import columns exactly
 function message(){const L=["טופס מתפלל · גבאי עליות"];const add=(k,v)=>{if(v&&String(v).trim())L.push(k+": "+String(v).trim())};
   add("שם מלא (לעלייה לתורה)",d.name);add("שם משפחה",d.family);add("שם האב",d.father);add("שם האם",d.mother);add("שבט",d.tribe);
   if(d.married==="כן"){add("שם אם האישה",d.wifeMother);add("שם אב האישה",d.wifeFather)}
-  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name)L.push("ילד "+(n+1)+": "+k.name+" | "+(k.gender||"")+" | "+dmy(k.birth))});
+  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name)L.push("ילד "+(n+1)+": "+k.name+" | "+(k.gender||"")+" | "+dmy(k.birth)+(kidAdult(k)&&k.bm?" | פרשת בר מצווה: "+k.bm:"")+(kidAdult(k)&&k.bmRead?" | מעוניין לקרוא: כן":""))});
   add("האם יש יארצייט?",d.hasYz||"");
-  if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date){add("תאריך פטירה "+(n+1),dmy(y.date));add("יארצייט של "+(n+1),y.for)}});
-  add("פרשת בר מצווה",d.bm);if(d.married==="כן")add("יום נישואין",dmy(d.wedding));add("תאריך מיוחד אחר: מה",d.otherLabel);add("תאריך מיוחד אחר: תאריך",dmy(d.otherDate));
+  if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date){add("תאריך פטירה "+(n+1),dmy(y.date));add("תאריך פטירה עברי "+(n+1),y.heb);add("יארצייט של "+(n+1),y.for)}});
+  add("פרשת בר מצווה",d.bm);add("מעוניין לקרוא בפרשת בר מצווה",d.bmRead?"כן":"");if(d.married==="כן")add("יום נישואין",dmy(d.wedding));add("תאריך מיוחד אחר: מה",d.otherLabel);add("תאריך מיוחד אחר: תאריך",dmy(d.otherDate));
   add("טלפון",d.phone);add("מייל",d.email);
   return L.join("\n")}
 function summaryView(){const msg=message();const url="https://wa.me/"+GABAI_PHONE+"?text="+encodeURIComponent(msg);
@@ -201,8 +237,12 @@ function draw(){const S=steps();if(i>=S.length)i=S.length-1;const st=S[i];const 
 }
 function read(st){const v=id=>{const e=document.getElementById(id);return e?e.value.trim():""};
   if(TEXT[st.id]||st.id==="bm"||st.id==="wedding")d[st.id]=v("in");
-  if(st.id==="kid"){d.kids[st.k]=Object.assign({},d.kids[st.k],{name:v("kName"),birth:v("kBirth")})}
-  if(st.id==="yz"){d.yz[st.k]={date:v("yDate"),for:v("yFor")}}
+  const ck=id=>{const e=document.getElementById(id);return e?e.checked:undefined};
+  if(st.id==="kid"){const k=Object.assign({},d.kids[st.k],{name:v("kName"),birth:v("kBirth")});if(document.getElementById("kBm")){k.bm=v("kBm");k.bmRead=ck("kRead")}d.kids[st.k]=k}
+  if(st.id==="yz"){const y=Object.assign({},d.yz[st.k],{for:v("yFor")});
+    if(document.getElementById("yHd")){y.hd=v("yHd");y.hm=v("yHm");y.hy=v("yHy");y.date=hebToIso(y.hd,y.hm,y.hy)}else{y.date=v("yDate");delete y.hd;delete y.hm;delete y.hy}
+    y.heb=hebOfIso(y.date);d.yz[st.k]=y}
+  if(st.id==="bm")d.bmRead=!!ck("bmRead");
   if(st.id==="other"){d.otherLabel=v("oLabel");d.otherDate=v("oDate")}
   if(st.id==="contact"){d.phone=v("cPhone");d.email=v("cEmail")}
   save()}
@@ -213,7 +253,9 @@ function check(st){const t=TEXT[st.id];
   if(st.id==="contact"&&d.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email))return "כתובת המייל לא נראית תקינה. בדקו אותה, או השאירו ריק.";
   if(["married","hasKids","hasYz"].includes(st.id)&&!d[st.id])return "בחרו כן או לא.";
   if(st.id==="kid"&&!(d.kids[st.k]&&d.kids[st.k].name))return "כתבו את שם הילד, או חזרו אחורה ובחרו שאין ילדים.";
-  if(st.id==="yz"&&!(d.yz[st.k]&&d.yz[st.k].date))return "בחרו את תאריך הפטירה.";
+  if(st.id==="yz"&&!(d.yz[st.k]&&d.yz[st.k].date)){const y=d.yz[st.k]||{};
+    if(y.cal==="he"&&y.hd&&y.hm&&y.hy)return hebLeap(+y.hy)&&y.hm==="אדר"?"השנה הזאת מעוברת. בחרו אדר א׳ או אדר ב׳.":"התאריך הזה לא קיים בשנה שנבחרה. בדקו את היום והחודש.";
+    return "בחרו את תאריך הפטירה."}
   return ""}
 function next(){const S=steps(),st=S[i];read(st);const e=check(st);if(e){document.getElementById("err").textContent=e;return}i++;draw()}
 document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const S=steps(),st=S[i];
@@ -225,6 +267,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)r
     .catch(()=>{b.disabled=false;b.lastChild.textContent="שליחה לגבאי";st2.innerHTML='השמירה לא הצליחה. אפשר לשלוח את כל הפרטים בוואטסאפ: <a href="https://wa.me/'+GABAI_PHONE+'?text='+encodeURIComponent(msg)+'" target="_blank" rel="noopener">שליחה בוואטסאפ</a>'});return}
   if(b.id==="back"){read(st);i=Math.max(0,i-1);return draw()}
   if(b.dataset.pick){read(st);d[b.dataset.pick]=b.dataset.v;if(b.dataset.pick==="hasKids"&&b.dataset.v==="כן"&&!d.kids.length)d.kids=[{}];if(b.dataset.pick==="hasYz"&&b.dataset.v==="כן"&&!d.yz.length)d.yz=[{}];save();i++;return draw()}
+  if(b.dataset.cal){read(st);d.yz[st.k]=Object.assign({},d.yz[st.k],{cal:b.dataset.cal});save();return draw()}
   if(b.dataset.kid!==undefined){read(st);const k=+b.dataset.kid;d.kids[k]=Object.assign({},d.kids[k],{gender:b.dataset.v});save();return draw()}
   if(b.dataset.more){read(st);d[b.dataset.more].push({});save();return draw()} // the new item takes this step's place
   if(b.dataset.nomore){i++;return draw()}
@@ -232,7 +275,9 @@ document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)r
     navigator.clipboard.writeText(txt).then(()=>{b.textContent="ההודעה הועתקה. הדביקו אותה בוואטסאפ לגבאי"},()=>{box.hidden=false;box.focus();box.select();b.textContent="סמנו את הטקסט והעתיקו"})}
 });
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT"){e.preventDefault();next()}});
-document.addEventListener("change",e=>{if(e.target.id==="kBirth"){const a=age(e.target.value);document.getElementById("kAge").textContent=a!==null?"גיל "+a:""}});
+document.addEventListener("change",e=>{const S=steps(),st=S[i];
+  if(e.target.id==="kBirth"){const was=!!document.getElementById("kBm");read(st);const k=d.kids[st.k]||{};if(was!==!!kidAdult(k))return draw();const a=age(e.target.value);document.getElementById("kAge").textContent=a!==null?"גיל "+a:""}
+  if(st&&st.id==="yz"&&/^(yDate|yH[dmy])$/.test(e.target.id)){read(st);const c=document.getElementById("yConv");if(c)c.textContent=yConv(d.yz[st.k])}});
 draw();
 })();
 </script>
