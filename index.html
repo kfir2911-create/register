@@ -273,9 +273,11 @@ function next(){const S=steps(),st=S[i];read(st);const e=check(st);if(e){documen
 document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const S=steps(),st=S[i];
   if(b.id==="next")return next();
   if(b.id==="sendBtn"){if(sent)return;const st2=document.getElementById("sendStatus");b.disabled=true;b.lastChild.textContent="שולח...";const msg=message();
-    saveToInbox(msg).then(()=>{sent=true;b.lastChild.textContent="נשלח ✓";try{localStorage.removeItem(KEY)}catch(e){}st2.textContent="הפרטים נשמרו. פותחים את וואטסאפ להודעה לגבאי...";
+    saveToInbox(msg).then(()=>{sent=true;b.lastChild.textContent="נשלח ✓";try{localStorage.removeItem(KEY)}catch(e){}
       const short="שלום, מילאתי עכשיו טופס מתפלל באתר הרישום.\n"+[d.name,d.family].filter(Boolean).join(" ")+(d.father?" בן "+d.father:"")+"\n(הפרטים נשמרו אוטומטית באפליקציה)";
-      setTimeout(()=>{location.href="https://wa.me/"+GABAI_PHONE+"?text="+encodeURIComponent(short)},700)})
+      const wa="https://wa.me/"+GABAI_PHONE+"?text="+encodeURIComponent(short);
+      st2.innerHTML="<b>הפרטים נשמרו ✓</b><br>עכשיו נפתח וואטסאפ. <b>לחצו שם על שליחה</b> כדי שהגבאי יקבל הודעה.<br>אם וואטסאפ לא נפתח, <a href=\""+wa+"\">לחצו כאן</a>.";
+      setTimeout(()=>{location.href=wa},2500)})
     .catch(()=>{b.disabled=false;b.lastChild.textContent="שליחה לגבאי";st2.innerHTML='השמירה לא הצליחה. אפשר לשלוח את כל הפרטים בוואטסאפ: <a href="https://wa.me/'+GABAI_PHONE+'?text='+encodeURIComponent(msg)+'" target="_blank" rel="noopener">שליחה בוואטסאפ</a>'});return}
   if(b.id==="back"){read(st);i=Math.max(0,i-1);return draw()}
   if(b.dataset.pick){read(st);d[b.dataset.pick]=b.dataset.v;if(b.dataset.pick==="hasKids"&&b.dataset.v==="כן"&&!d.kids.length)d.kids=[{}];if(b.dataset.pick==="hasYz"&&b.dataset.v==="כן"&&!d.yz.length)d.yz=[{}];save();i++;return draw()}
