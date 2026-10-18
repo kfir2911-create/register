@@ -61,6 +61,7 @@ input:focus,select:focus,button:focus-visible{outline:3px solid color-mix(in srg
 .done{text-align:center;align-items:center;justify-content:center}
 .done .big{font-size:3rem;line-height:1}
 textarea{font:13px/1.45 var(--body);width:100%;min-height:120px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--field);color:var(--ink)}
+.note{margin:0;padding:12px 14px;border-radius:12px;background:var(--gold-soft);color:var(--ink);font-weight:500;text-align:center}
 .foot{color:var(--muted);font-size:.8rem;text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .chk{display:flex;align-items:center;gap:10px;font-weight:500;font-size:1rem;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--field);cursor:pointer}
@@ -123,6 +124,12 @@ function hebSel(prefix,h){h=h||{};const cur=hebOf(new Date().toISOString().slice
   let months=opt("","חודש",h.m);HEB_MONTH_LIST.forEach(n=>months+=opt(n,n,h.m));
   let years=opt("","שנה",h.y);for(let i=Y;i>=5660;i--)years+=opt(i,gem(i)+" "+(i-3760),h.y);
   return `<span class="dsel" role="group" aria-label="תאריך עברי"><select id="${prefix}Hd" aria-label="יום">${days}</select><select id="${prefix}Hm" data-hm aria-label="חודש">${months}</select><select id="${prefix}Hy" aria-label="שנה">${years}</select></span>`}
+const HOLIDAYS=["ראש השנה","יום כיפור","סוכות","חול המועד סוכות","שמיני עצרת","פסח","חול המועד פסח","שביעי של פסח","שבועות"];
+const parOpts=cur=>`<optgroup label="פרשות השבוע">${PARASHOT.map(p=>`<option${cur===p?" selected":""}>${p}</option>`).join("")}</optgroup><optgroup label="חגים">${HOLIDAYS.map(p=>`<option${cur===p?" selected":""}>${p}</option>`).join("")}</optgroup>`;
+// two checkboxes: reading the parasha / reading the haftarah; ids get the given prefix + Read / Haf
+const readChecks=(pre,torah,haf)=>`<label class="chk"><input type="checkbox" id="${pre}Read"${torah?" checked":""}> מעוניין לקרוא את הפרשה</label>
+    <label class="chk"><input type="checkbox" id="${pre}Haf"${haf?" checked":""}> מעוניין לקרוא את ההפטרה</label>`;
+const readText=(torah,haf)=>[torah?"קורא בתורה":"",haf?"קורא הפטרה":""].filter(Boolean).join(", ");
 const GABAI_PHONE="972546563366";
 // Firebase project that receives the encrypted forms (empty = WhatsApp only). Only the gabbai's app holds the private key.
 const FB_PROJECT="aliyot-83aea";
@@ -161,7 +168,7 @@ function steps(){
   s.push({id:"hasYz",label:"יארצייט"});
   if(d.hasYz==="כן"){const n=Math.max(1,d.yz.length);for(let k=0;k<n;k++){s.push({id:"yz",k,label:"יארצייט"});if(k===n-1&&k<1)s.push({id:"moreYz",k,label:"יארצייט"})}}
   s.push({id:"bm",label:"תאריכים"});
-  if(d.married==="כן")s.push({id:"wedding",label:"תאריכים"});
+  if(d.married==="כן")s.push({id:"wedding",label:"תאריכים"},{id:"chatan",label:"תאריכים"});
   s.push({id:"other",label:"תאריכים"},{id:"contact",label:"יצירת קשר"},{id:"summary",label:"סיום"});
   return s;
 }
@@ -180,8 +187,8 @@ function view(st){
     <div class="choices">${["בן","בת"].map(v=>`<button type="button" class="choice" data-kid="${st.k}" data-v="${v}" aria-pressed="${k.gender===v}">${v}</button>`).join("")}</div>
     <label class="f">תאריך לידה${dateSel('id="kBirth"',k.birth,"תאריך לידה")}</label>
     <span class="age" id="kAge">${a!==null?"גיל "+a:""}</span>
-    ${k.gender==="בן"&&a!==null&&a>=13?`<label class="f">פרשת בר המצווה של ${esc(k.name||"הבן")}<select id="kBm"><option value="">לא זוכר / לדלג</option>${PARASHOT.map(p=>`<option${k.bm===p?" selected":""}>${p}</option>`).join("")}</select></label>
-    <label class="chk"><input type="checkbox" id="kRead"${k.bmRead?" checked":""}> מעוניין לקרוא בתורה בשבת פרשת בר המצווה</label>`:""}`}
+    ${k.gender==="בן"&&a!==null&&a>=13?`<label class="f">פרשת בר המצווה של ${esc(k.name||"הבן")}<select id="kBm"><option value="">לא זוכר / לדלג</option>${parOpts(k.bm)}</select></label>
+    ${readChecks("k",k.bmRead,k.bmHaf)}`:""}`}
   if(st.id==="moreKids")return `<h2 class="q">יש עוד ילד?</h2><div class="choices"><button type="button" class="choice" data-more="kids">כן, להוסיף</button><button type="button" class="choice" data-nomore="1">לא, להמשיך</button></div>`;
   if(st.id==="hasYz")return yesNo("האם יש לך יארצייט?","hasYz","יום השנה לפטירת קרוב משפחה. בשבוע הזה תקבל עדיפות לעלייה.");
   if(st.id==="yz"){const y=d.yz[st.k]||{};const he=y.cal==="he";return `<h2 class="q">יארצייט ${st.k+1}</h2>
@@ -191,8 +198,10 @@ function view(st){
     <p class="conv" id="yConv">${yConv(y)}</p>
     <label class="f">יארצייט של<input id="yFor" value="${esc(y.for)}" placeholder="למשל: אבי, אמי, סבי" autocomplete="off"></label>`}
   if(st.id==="moreYz")return `<h2 class="q">יש יארצייט נוסף?</h2><div class="choices"><button type="button" class="choice" data-more="yz">כן, להוסיף</button><button type="button" class="choice" data-nomore="1">לא, להמשיך</button></div>`;
-  if(st.id==="bm")return `<h2 class="q">באיזו פרשה הייתה בר המצווה שלך?</h2><p class="hint">אפשר לדלג אם לא זוכרים.</p><select id="in"><option value="">לא זוכר / לדלג</option>${PARASHOT.map(p=>`<option${d.bm===p?" selected":""}>${p}</option>`).join("")}</select>
-    <label class="chk"><input type="checkbox" id="bmRead"${d.bmRead?" checked":""}> מעוניין לקרוא בתורה בשבת פרשת בר המצווה</label>`;
+  if(st.id==="bm")return `<h2 class="q">באיזו פרשה הייתה בר המצווה שלך?</h2><p class="hint">אפשר לדלג אם לא זוכרים.</p><select id="in"><option value="">לא זוכר / לדלג</option>${parOpts(d.bm)}</select>
+    ${readChecks("bm",d.bmRead,d.bmHaf)}`;
+  if(st.id==="chatan")return `<h2 class="q">באיזו פרשה הייתה שבת החתן שלך?</h2><p class="hint">לא חובה. אפשר לדלג.</p><select id="chPar"><option value="">לא זוכר / לדלג</option>${parOpts(d.chatan)}</select>
+    ${readChecks("ch",d.chRead,d.chHaf)}`;
   if(st.id==="wedding")return `<h2 class="q">מתי יום הנישואין?</h2><p class="hint">אפשר לדלג.</p>${dateSel('id="in"',d.wedding,"יום הנישואין")}`;
   if(st.id==="other")return `<h2 class="q">יש תאריך מיוחד נוסף?</h2><p class="hint">למשל יום הולדת או יום עלייה לארץ. אפשר לדלג.</p>
     <label class="f">מה התאריך<input id="oLabel" value="${esc(d.otherLabel)}" placeholder="יום הולדת" autocomplete="off"></label>
@@ -205,18 +214,19 @@ function view(st){
 function yConv(y){if(!y||!y.date)return"";return y.cal==="he"?"בלועזי: "+dmy(y.date):"בעברי: "+hebOfIso(y.date)}
 function rows(){const r=[["שם מלא",d.name],["שם משפחה",d.family],["שם האב",d.father],["שם האם",d.mother],["שבט",d.tribe]];
   if(d.married==="כן")r.push(["שם האישה",d.wife],["אב האישה",d.wifeFather],["אם האישה",d.wifeMother]);
-  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name){const a=age(k.birth);r.push(["ילד "+(n+1),k.name+(k.gender?" ("+k.gender+")":"")+(a!==null?" · גיל "+a:"")+(kidAdult(k)&&k.bm?" · בר מצווה: "+k.bm:"")+(kidAdult(k)&&k.bmRead?" · מעוניין לקרוא":"")])}});
+  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name){const a=age(k.birth);r.push(["ילד "+(n+1),k.name+(k.gender?" ("+k.gender+")":"")+(a!==null?" · גיל "+a:"")+(kidAdult(k)&&k.bm?" · בר מצווה: "+k.bm:"")+(kidAdult(k)&&(k.bmRead||k.bmHaf)?" · "+readText(k.bmRead,k.bmHaf):"")])}});
   if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date)r.push(["יארצייט "+(n+1),(y.heb?y.heb+" · ":"")+dmy(y.date)+(y.for?" · "+y.for:"")])});
-  r.push(["פרשת בר מצווה",(d.bm||"")+(d.bmRead?(d.bm?" · ":"")+"מעוניין לקרוא":"")],["יום נישואין",d.married==="כן"?dmy(d.wedding):""],["תאריך מיוחד",(d.otherLabel||"")+(d.otherDate?" "+dmy(d.otherDate):"")],["טלפון",d.phone],["מייל",d.email]);
+  r.push(["פרשת בר מצווה",[d.bm,readText(d.bmRead,d.bmHaf)].filter(Boolean).join(" · ")],["יום נישואין",d.married==="כן"?dmy(d.wedding):""],["פרשת חתן",d.married==="כן"?[d.chatan,readText(d.chRead,d.chHaf)].filter(Boolean).join(" · "):""],["תאריך מיוחד",(d.otherLabel||"")+(d.otherDate?" "+dmy(d.otherDate):"")],["טלפון",d.phone],["מייל",d.email]);
   return r.filter(x=>x[1]&&String(x[1]).trim())}
 // the message the gabbai pastes into the app; labels match the app's import columns exactly
 function message(){const L=["טופס מתפלל · גבאי עליות"];const add=(k,v)=>{if(v&&String(v).trim())L.push(k+": "+String(v).trim())};
   add("שם מלא (לעלייה לתורה)",d.name);add("שם משפחה",d.family);add("שם האב",d.father);add("שם האם",d.mother);add("שבט",d.tribe);
   if(d.married==="כן"){add("שם האישה",d.wife);add("שם אב האישה",d.wifeFather);add("שם אם האישה",d.wifeMother)}
-  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name)L.push("ילד "+(n+1)+": "+k.name+" | "+(k.gender||"")+" | "+dmy(k.birth)+(kidAdult(k)&&k.bm?" | פרשת בר מצווה: "+k.bm:"")+(kidAdult(k)&&k.bmRead?" | מעוניין לקרוא: כן":""))});
+  if(d.hasKids==="כן")d.kids.forEach((k,n)=>{if(k&&k.name)L.push("ילד "+(n+1)+": "+k.name+" | "+(k.gender||"")+" | "+dmy(k.birth)+(kidAdult(k)&&k.bm?" | פרשת בר מצווה: "+k.bm:"")+(kidAdult(k)&&k.bmRead?" | מעוניין לקרוא: כן":"")+(kidAdult(k)&&k.bmHaf?" | מעוניין לקרוא הפטרה: כן":""))});
   add("האם יש יארצייט?",d.hasYz||"");
   if(d.hasYz==="כן")d.yz.forEach((y,n)=>{if(y&&y.date){add("תאריך פטירה "+(n+1),dmy(y.date));add("תאריך פטירה עברי "+(n+1),y.heb);add("יארצייט של "+(n+1),y.for)}});
-  add("פרשת בר מצווה",d.bm);add("מעוניין לקרוא בפרשת בר מצווה",d.bmRead?"כן":"");if(d.married==="כן")add("יום נישואין",dmy(d.wedding));add("תאריך מיוחד אחר: מה",d.otherLabel);add("תאריך מיוחד אחר: תאריך",dmy(d.otherDate));
+  add("פרשת בר מצווה",d.bm);add("מעוניין לקרוא בפרשת בר מצווה",d.bmRead?"כן":"");add("מעוניין לקרוא הפטרה בבר מצווה",d.bmHaf?"כן":"");
+  if(d.married==="כן"){add("יום נישואין",dmy(d.wedding));add("פרשת חתן",d.chatan);add("מעוניין לקרוא בפרשת חתן",d.chRead?"כן":"");add("מעוניין לקרוא הפטרה בשבת חתן",d.chHaf?"כן":"")}add("תאריך מיוחד אחר: מה",d.otherLabel);add("תאריך מיוחד אחר: תאריך",dmy(d.otherDate));
   add("טלפון",d.phone);add("מייל",d.email);
   return L.join("\n")}
 function summaryView(){const msg=message();const url="https://wa.me/"+GABAI_PHONE+"?text="+encodeURIComponent(msg);
@@ -227,6 +237,7 @@ function summaryView(){const msg=message();const url="https://wa.me/"+GABAI_PHON
   <p class="hint" id="sendStatus" role="status" style="margin:0"></p>`:`<p class="hint" style="margin:0">לחצו "שליחה בוואטסאפ" ושלחו את ההודעה לגבאי כמו שהיא.</p>
   <a class="btn wa" href="${url}" target="_blank" rel="noopener"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.8-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.2.1.7-.1 1.2z"/></svg>שליחה בוואטסאפ</a>`}
   <button type="button" class="btn copy" id="copyBtn">העתקת ההודעה</button>
+  <p class="note">בכל מקרה פרטני יש לפנות לכפיר שובל</p>
   <textarea id="msgBox" readonly aria-label="ההודעה לגבאי" hidden>${esc(msg)}</textarea>`}
 
 function draw(){const S=steps();if(i>=S.length)i=S.length-1;const st=S[i];const card=document.getElementById("card");
@@ -238,11 +249,12 @@ function draw(){const S=steps();if(i>=S.length)i=S.length-1;const st=S[i];const 
 function read(st){const v=id=>{const e=document.getElementById(id);return e?e.value.trim():""};
   if(TEXT[st.id]||st.id==="bm"||st.id==="wedding")d[st.id]=v("in");
   const ck=id=>{const e=document.getElementById(id);return e?e.checked:undefined};
-  if(st.id==="kid"){const k=Object.assign({},d.kids[st.k],{name:v("kName"),birth:v("kBirth")});if(document.getElementById("kBm")){k.bm=v("kBm");k.bmRead=ck("kRead")}d.kids[st.k]=k}
+  if(st.id==="kid"){const k=Object.assign({},d.kids[st.k],{name:v("kName"),birth:v("kBirth")});if(document.getElementById("kBm")){k.bm=v("kBm");k.bmRead=ck("kRead");k.bmHaf=ck("kHaf")}d.kids[st.k]=k}
   if(st.id==="yz"){const y=Object.assign({},d.yz[st.k],{for:v("yFor")});
     if(document.getElementById("yHd")){y.hd=v("yHd");y.hm=v("yHm");y.hy=v("yHy");y.date=hebToIso(y.hd,y.hm,y.hy)}else{y.date=v("yDate");delete y.hd;delete y.hm;delete y.hy}
     y.heb=hebOfIso(y.date);d.yz[st.k]=y}
-  if(st.id==="bm")d.bmRead=!!ck("bmRead");
+  if(st.id==="bm"){d.bmRead=!!ck("bmRead");d.bmHaf=!!ck("bmHaf")}
+  if(st.id==="chatan"){d.chatan=v("chPar");d.chRead=!!ck("chRead");d.chHaf=!!ck("chHaf")}
   if(st.id==="other"){d.otherLabel=v("oLabel");d.otherDate=v("oDate")}
   if(st.id==="contact"){d.phone=v("cPhone");d.email=v("cEmail")}
   save()}
